@@ -46,3 +46,10 @@ wp-config.php
 # Note: If you wish to whitelist themes,
 # uncomment the next line
 #/wp-content/themes
+
+/tests/
+.env.testing
+codeception.dist.yml
+composer.json
+composer.lock
+/vendor/
