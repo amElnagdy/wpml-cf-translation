@@ -5,6 +5,7 @@ class WPML_Custom_Fields_Translation {
 	public function __construct() {
 		add_action( 'admin_menu', array( $this, 'wpml_custom_fields_helper_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+		add_action( 'wp_ajax_wpml_cf_generate_xml', array( $this, 'wpml_cf_generate_xml' ) );
 	}
 
 	public function enqueue_scripts() {
@@ -20,7 +21,7 @@ class WPML_Custom_Fields_Translation {
 			'wpml_custom_fields_helper_script',
 			'wpmlData',
 			array(
-				'wpml_config' => $this->generate_wpml_config(),
+				'ajax_url' => admin_url( 'admin-ajax.php' ),
 			)
 		);
 	}
@@ -32,8 +33,7 @@ class WPML_Custom_Fields_Translation {
 			'manage_options',
 			'wpml-cf-translation',
 			array( $this, 'wpml_cf_helper_admin_page' ),
-			'dashicons-code-standards',
-			99
+			'dashicons-list-view'
 		);
 	}
 
@@ -44,17 +44,12 @@ class WPML_Custom_Fields_Translation {
 
 		echo '<h1>' . esc_html__( 'WPML Custom Fields Translation', 'wpml-cf-translation' ) . '</h1>';
 
-		$custom_fields = $this->get_custom_fields();
 
-		if ( ! empty( $custom_fields ) ) {
-			echo esc_html__( 'We have found custom fields in your website. Press Generate XML to generate the translation preferences for them.', 'wpml-cf-translation' );
-			echo '<br >';
-			echo '<button id="generate">' . esc_html__( 'Generate XML', 'wpml-cf-translation' ) . '</button>';
-			echo '<button id="copy">' . esc_html__( 'Copy XML', 'wpml-cf-translation' ) . '</button>';
-			echo '<textarea id="xml_output" readonly style="width:100%;min-height:200px;"></textarea>';
-		} else {
-			echo esc_html__( 'The custom fields in this website have their translation preferences', 'wpml-cf-translation' );
-		}
+		$custom_fields           = $this->get_custom_fields();
+		$translation_preferences = $this->determine_translation_preference();
+
+
+		require_once plugin_dir_path( __FILE__ ) . 'admin.php';
 	}
 
 	public function get_custom_fields() {
@@ -99,15 +94,19 @@ class WPML_Custom_Fields_Translation {
 
 		$custom_fields = array_diff( $custom_fields, $excluded_custom_fields );
 
-		// We don't need these fields wpml_, attribute_pa-, or acfml-
+		// We don't need these fields wpml_, attribute_pa-, acfml, etc..
 
-		foreach ( $custom_fields as $key => $field ) {
-			if ( strpos( $field, 'acfml' ) !== false ||
-			     strpos( $field, 'attribute_pa' ) !== false ||
-			     strpos( $field, 'wpml' ) !== false ) {
-				unset( $custom_fields[ $key ] );
+		$excluded_prefixes = ['acfml', 'attribute_pa', 'wpml', 'wpform'];
+
+		$custom_fields = array_filter($custom_fields, function ($field) use ($excluded_prefixes) {
+			foreach ($excluded_prefixes as $prefix) {
+				if (strpos($field, $prefix) === 0) {
+					return false;
+				}
 			}
-		}
+			return true;
+		});
+
 
 		return $custom_fields;
 	}
@@ -127,22 +126,57 @@ class WPML_Custom_Fields_Translation {
 			$date        = DateTime::createFromFormat( 'd-m-Y', $value );
 			$date_errors = DateTime::getLastErrors();
 
+			// These values should be copied to translations
 			$copy_values = [ 'yes', 'no', 'on', 'off', 'true', 'false', 'default' ];
+
+			// Is it a hash-like string? Something like ffd4rf34d should be set to copy
+			$isHashString = strlen( $value ) > 5 && preg_match( '/\d/', $value ) && preg_match( '/[a-zA-Z]/', $value ) && strpos( $value, ' ' ) === false;
+
 
 			if ( is_numeric( $value ) ||
 			     ( $date && $date_errors['warning_count'] == 0 && $date_errors['error_count'] == 0 ) ||
 			     in_array( $value, $copy_values ) ||
-			     is_serialized( $value )
+			     is_serialized( $value ) ||
+			     null ||
+			     empty( $value ) ||
+			     // Check if the value is an email or contains HTTP
+			     filter_var( $value, FILTER_VALIDATE_EMAIL ) ||
+			     strpos( $value, 'http' ) !== false
+			     || $isHashString
 			) {
 				$translation_preferences[ $custom_field ] = 'copy';
 			} else {
 				$translation_preferences[ $custom_field ] = 'translate';
 			}
-
 		}
 
 		return $translation_preferences;
 	}
+
+
+	public function wpml_cf_generate_xml() {
+
+		check_ajax_referer( 'wpml_cf_nonce', 'wpml_cf_nonce' );
+
+		// Prepare the base of your XML
+		$wpml_config = '<wpml-config><custom-fields>';
+		foreach ( $_POST['cf'] as $custom_field => $preference ) {
+			$custom_field = sanitize_text_field( $custom_field );
+			$preference   = sanitize_text_field( $preference );
+
+			$wpml_config .= "<custom-field action=\"$preference\">$custom_field</custom-field>";
+		}
+
+		$wpml_config .= '</custom-fields></wpml-config>';
+
+		// Create the XML file
+		$formatted_xml = $this->format_xml( $wpml_config );
+
+		echo $formatted_xml;
+
+		wp_die();
+	}
+
 
 	public function format_xml( $xml_string ) {
 		$dom                     = new DOMDocument;
@@ -151,19 +185,5 @@ class WPML_Custom_Fields_Translation {
 		$dom->formatOutput = true;
 
 		return htmlentities( $dom->saveXML( $dom->documentElement ) );
-	}
-
-	public function generate_wpml_config() {
-		$translation_preferences = $this->determine_translation_preference();
-
-		$wpml_config = '<wpml-config><custom-fields>';
-
-		foreach ( $translation_preferences as $custom_field => $preference ) {
-			$wpml_config .= "<custom-field action=\"$preference\">$custom_field</custom-field>";
-		}
-
-		$wpml_config .= '</custom-fields></wpml-config>';
-
-		return $this->format_xml( $wpml_config );
 	}
 }
