@@ -31,3 +31,17 @@ With this plugin, you can easily specify whether a custom field should be transl
 3. Adjust the preferences if needed.
 4. Click the **Generate XML** button to generate the XML configuration.
 5. Copy the generated XML and paste it into the **Custom XML Configuration** tab in WPML.
+
+## Screenshots
+
+**No Custom Fields Found:**
+![no-cfs-found](https://github.com/amElnagdy/wpml-cf-translation/assets/7650147/f7ed3551-cf63-4ff9-87ca-e7466a224a74)
+
+**Suggested Translation Preferences**
+![suggested_translation_preferences](https://github.com/amElnagdy/wpml-cf-translation/assets/7650147/e5ba344d-35f8-441a-ab21-9ff6fe9db975)
+
+**You can adjust the translation preferences**
+![adjusted_preferences](https://github.com/amElnagdy/wpml-cf-translation/assets/7650147/178af64c-5ac3-4411-859c-13f3b2ab4d4a)
+
+**Generated XML**
+![generated_xml](https://github.com/amElnagdy/wpml-cf-translation/assets/7650147/0a23a2a4-a522-4aea-ac13-7f6c155d053d)
